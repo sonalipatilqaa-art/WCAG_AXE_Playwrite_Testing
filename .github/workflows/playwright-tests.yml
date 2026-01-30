@@ -59,6 +59,14 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: automation-framework/yarn.lock
 
+      - name: Cache Yarn dependencies
+        uses: actions/cache@v3
+        with:
+          path: automation-framework/node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('automation-framework/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
       - name: Install dependencies
         working-directory: automation-framework
         run: yarn install --frozen-lockfile
