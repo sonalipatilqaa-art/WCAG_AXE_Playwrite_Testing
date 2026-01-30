@@ -1,0 +1,41 @@
+{
+  "name": "playwright-automation-framework",
+  "version": "1.0.0",
+  "description": "Comprehensive Playwright + TypeScript automation framework with BrowserStack, Accessibility, and Performance testing",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:browserstack": "BROWSERSTACK=true playwright test",
+    "test:accessibility": "playwright test --grep @accessibility",
+    "test:performance": "playwright test --grep @performance",
+    "test:chrome": "playwright test --project=chromium",
+    "test:firefox": "playwright test --project=firefox",
+    "test:webkit": "playwright test --project=webkit",
+    "test:mobile": "playwright test --project=mobile-chrome",
+    "report": "playwright show-report",
+    "ui": "playwright test --ui",
+    "codegen": "playwright codegen"
+  },
+  "keywords": [
+    "playwright",
+    "typescript",
+    "automation",
+    "testing",
+    "browserstack",
+    "accessibility",
+    "performance"
+  ],
+  "author": "Principal SDET",
+  "license": "MIT",
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.0",
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^22.10.2",
+    "dotenv": "^16.4.7",
+    "lighthouse": "^12.2.1",
+    "playwright-lighthouse": "^4.0.0",
+    "typescript": "^5.7.2"
+  }
+}

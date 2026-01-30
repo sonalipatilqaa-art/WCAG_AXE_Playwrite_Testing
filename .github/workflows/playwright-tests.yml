@@ -1,0 +1,257 @@
+name: Playwright Automation Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run tests daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: 'Browser to test'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - chromium
+          - firefox
+          - webkit
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - smoke
+          - login
+          - products
+          - cart
+          - accessibility
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  test:
+    name: Run Tests on ${{ matrix.browser }}
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        shard: [1/4, 2/4, 3/4, 4/4]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: automation-framework/yarn.lock
+
+      - name: Install dependencies
+        working-directory: automation-framework
+        run: yarn install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: automation-framework
+        run: yarn playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Create .env file
+        working-directory: automation-framework
+        run: |
+          cp .env.example .env
+          echo "BASE_URL=https://www.saucedemo.com" >> .env
+          echo "HEADLESS=true" >> .env
+
+      - name: Run Playwright tests
+        working-directory: automation-framework
+        run: |
+          if [ "${{ github.event.inputs.test_suite }}" = "smoke" ]; then
+            yarn test --project=${{ matrix.browser }} --grep @smoke --shard=${{ matrix.shard }}
+          elif [ "${{ github.event.inputs.test_suite }}" = "login" ]; then
+            yarn test --project=${{ matrix.browser }} --grep @login --shard=${{ matrix.shard }}
+          elif [ "${{ github.event.inputs.test_suite }}" = "products" ]; then
+            yarn test --project=${{ matrix.browser }} --grep @products --shard=${{ matrix.shard }}
+          elif [ "${{ github.event.inputs.test_suite }}" = "cart" ]; then
+            yarn test --project=${{ matrix.browser }} --grep @cart --shard=${{ matrix.shard }}
+          elif [ "${{ github.event.inputs.test_suite }}" = "accessibility" ]; then
+            yarn test --project=${{ matrix.browser }} --grep @accessibility --shard=${{ matrix.shard }}
+          else
+            yarn test --project=${{ matrix.browser }} --shard=${{ matrix.shard }}
+          fi
+        env:
+          CI: true
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ matrix.browser }}-${{ strategy.job-index }}
+          path: automation-framework/playwright-report/
+          retention-days: 30
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.browser }}-${{ strategy.job-index }}
+          path: automation-framework/test-results/
+          retention-days: 30
+
+      - name: Upload accessibility reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accessibility-reports-${{ matrix.browser }}-${{ strategy.job-index }}
+          path: automation-framework/reports/accessibility/
+          retention-days: 30
+
+      - name: Upload trace files on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces-${{ matrix.browser }}-${{ strategy.job-index }}
+          path: automation-framework/test-results/**/*.zip
+          retention-days: 30
+
+  browserstack:
+    name: Run Tests on BrowserStack
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: automation-framework/yarn.lock
+
+      - name: Install dependencies
+        working-directory: automation-framework
+        run: yarn install --frozen-lockfile
+
+      - name: Create .env file with BrowserStack credentials
+        working-directory: automation-framework
+        run: |
+          cp .env.example .env
+          echo "BROWSERSTACK_USERNAME=${{ secrets.BROWSERSTACK_USERNAME }}" >> .env
+          echo "BROWSERSTACK_ACCESS_KEY=${{ secrets.BROWSERSTACK_ACCESS_KEY }}" >> .env
+          echo "BROWSERSTACK_BUILD_NAME=GitHub Actions Build #${{ github.run_number }}" >> .env
+          echo "BROWSERSTACK_PROJECT_NAME=Playwright Automation" >> .env
+
+      - name: Run tests on BrowserStack
+        working-directory: automation-framework
+        run: yarn test:browserstack --grep @smoke
+        env:
+          BROWSERSTACK: true
+
+      - name: Upload BrowserStack results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browserstack-results
+          path: automation-framework/test-results/
+          retention-days: 30
+
+  accessibility:
+    name: Accessibility Tests
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+          cache-dependency-path: automation-framework/yarn.lock
+
+      - name: Install dependencies
+        working-directory: automation-framework
+        run: yarn install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: automation-framework
+        run: yarn playwright install --with-deps chromium
+
+      - name: Run accessibility tests
+        working-directory: automation-framework
+        run: yarn test:accessibility
+
+      - name: Upload accessibility reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accessibility-full-reports
+          path: automation-framework/reports/accessibility/
+          retention-days: 30
+
+      - name: Comment accessibility results on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'automation-framework/reports/accessibility/';
+            
+            // Read and post accessibility summary
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '## 🔍 Accessibility Test Results\n\nAccessibility reports have been generated and uploaded as artifacts.'
+            });
+
+  merge-reports:
+    name: Merge Test Reports
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Merge HTML reports
+        run: echo "Reports merged" # Placeholder for report merging logic
+
+      - name: Upload merged report
+        uses: actions/upload-artifact@v4
+        with:
+          name: merged-playwright-report
+          path: playwright-report/
+          retention-days: 30
+
+  notification:
+    name: Send Notifications
+    if: always()
+    needs: [test, browserstack, accessibility]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Test Results Summary
+        run: |
+          echo "## Test Execution Complete"
+          echo "Build: ${{ github.run_number }}"
+          echo "Status: ${{ needs.test.result }}"
+          echo "BrowserStack: ${{ needs.browserstack.result }}"
+          echo "Accessibility: ${{ needs.accessibility.result }}"
