@@ -1,39 +1,48 @@
-YAML
 name: Playwright Tests
 on:
   push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+
 jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
+    
+    # Setting the defaults ensures all 'run' commands happen in the correct folder
+    defaults:
+      run:
+        working-directory: automation-framework
 
-    - uses: actions/setup-node@v4
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: List files (Debug Step)
+      run: ls -R  # This helps verify if 'automation-framework' actually exists
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
       with:
         node-version: 20
-        # FIX: Ensure this path matches your repository structure 
-        # If your lock file is in the root, remove 'automation-framework/'
         cache: 'yarn'
+        # Pointing to the lock file relative to the repo root
         cache-dependency-path: 'automation-framework/yarn.lock'
 
-    - name: Install dependencies
-      # If using the subfolder, run: cd automation-framework && yarn install
-      run: yarn install
+    - name: Install Dependencies
+      run: yarn install --frozen-lockfile
 
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
 
-    - name: Run Playwright tests
-      # Runs tests in parallel with automatic retries as per your framework config
+    - name: Run Playwright Tests
       run: npx playwright test
 
-    - uses: actions/upload-artifact@v4
+    - name: Upload Report
       if: always()
+      uses: actions/upload-artifact@v4
       with:
         name: playwright-report
-        path: playwright-report/
+        path: automation-framework/playwright-report/
         retention-days: 30
