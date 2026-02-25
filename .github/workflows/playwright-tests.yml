@@ -9,28 +9,25 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    
-    # Setting the defaults ensures all 'run' commands happen in the correct folder
-    defaults:
-      run:
-        working-directory: automation-framework
-
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: List files (Debug Step)
-      run: ls -R  # This helps verify if 'automation-framework' actually exists
+    - name: List Files to Debug
+      # This will show us exactly where your files are
+      run: ls -R
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: 20
         cache: 'yarn'
-        # Pointing to the lock file relative to the repo root
-        cache-dependency-path: 'automation-framework/yarn.lock'
+        # Change this to 'yarn.lock' if it is in the root
+        # Or keep it if you are 100% sure it is in that folder
+        cache-dependency-path: 'yarn.lock' 
 
     - name: Install Dependencies
+      # If your files are in a subfolder, use: cd folder_name && yarn install
       run: yarn install --frozen-lockfile
 
     - name: Install Playwright Browsers
@@ -44,5 +41,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: playwright-report
-        path: automation-framework/playwright-report/
+        path: playwright-report/
         retention-days: 30
