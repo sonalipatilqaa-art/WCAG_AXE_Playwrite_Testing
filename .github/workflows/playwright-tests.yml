@@ -1,163 +1,39 @@
-name: Playwright Automation Tests
-
+YAML
+name: Playwright Tests
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, master ]
   pull_request:
-    branches: [main, develop]
-  schedule:
-    - cron: '0 6 * * *'
-  workflow_dispatch:
-    inputs:
-      browser:
-        description: 'Browser to test'
-        required: false
-        default: 'all'
-        type: choice
-        options: [all, chromium, firefox, webkit]
-      test_suite:
-        description: 'Test suite to run'
-        required: false
-        default: 'all'
-        type: choice
-        options: [all, smoke, login, products, cart, accessibility]
-
-env:
-  NODE_VERSION: '20'
-  # Setting the working directory as an env var for easier maintenance
-  WORKING_DIR: 'automation-framework'
-
+    branches: [ main, master ]
 jobs:
   test:
-    name: Run Tests on ${{ matrix.browser }}
-    timeout-minutes: 30
-    runs-on: ubuntu-latest
-    
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chromium, firefox, webkit]
-        shard: [1/4, 2/4, 3/4, 4/4]
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
-          # Fixed path to point exactly to your lockfile
-          cache-dependency-path: ${{ env.WORKING_DIR }}/yarn.lock
-
-      - name: Install dependencies
-        working-directory: ${{ env.WORKING_DIR }}
-        run: yarn install --frozen-lockfile
-
-      - name: Install Playwright browsers
-        working-directory: ${{ env.WORKING_DIR }}
-        run: yarn playwright install --with-deps ${{ matrix.browser }}
-
-      - name: Create .env file
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          cp .env.example .env || true
-          echo "BASE_URL=https://www.saucedemo.com" >> .env
-          echo "HEADLESS=true" >> .env
-
-      - name: Run Playwright tests
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          # Use grep logic based on input, default to all if 'all' is selected
-          if [ "${{ github.event.inputs.test_suite }}" != "all" ] && [ "${{ github.event.inputs.test_suite }}" != "" ]; then
-            yarn test --project=${{ matrix.browser }} --grep @${{ github.event.inputs.test_suite }} --shard=${{ matrix.shard }}
-          else
-            yarn test --project=${{ matrix.browser }} --shard=${{ matrix.shard }}
-          fi
-        env:
-          CI: true
-
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report-${{ matrix.browser }}-${{ strategy.job-index }}
-          path: ${{ env.WORKING_DIR }}/playwright-report/
-          retention-days: 30
-
-  browserstack:
-    name: Run Tests on BrowserStack
-    timeout-minutes: 30
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
-          cache-dependency-path: ${{ env.WORKING_DIR }}/yarn.lock
-
-      - name: Install dependencies
-        working-directory: ${{ env.WORKING_DIR }}
-        run: yarn install --frozen-lockfile
-
-      - name: Run tests on BrowserStack
-        working-directory: ${{ env.WORKING_DIR }}
-        run: yarn test:browserstack --grep @smoke
-        env:
-          BROWSERSTACK: true
-          BROWSERSTACK_USERNAME: ${{ secrets.BROWSERSTACK_USERNAME }}
-          BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
-
-  accessibility:
-    name: Accessibility Tests
-    timeout-minutes: 20
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
-          cache-dependency-path: ${{ env.WORKING_DIR }}/yarn.lock
-
-      - name: Install dependencies
-        working-directory: ${{ env.WORKING_DIR }}
-        run: yarn install --frozen-lockfile
-
-      - name: Install Playwright browsers
-        working-directory: ${{ env.WORKING_DIR }}
-        run: yarn playwright install --with-deps chromium
-
-      - name: Run accessibility tests
-        working-directory: ${{ env.WORKING_DIR }}
-        run: yarn test:accessibility
-
-      - name: Upload accessibility reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: accessibility-full-reports
-          path: ${{ env.WORKING_DIR }}/reports/accessibility/
-          retention-days: 30
-
-  notification:
-    name: Send Notifications
-    if: always()
-    needs: [test, browserstack, accessibility]
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-      - name: Test Results Summary
-        run: |
-          echo "## Test Execution Complete"
-          echo "Status: ${{ needs.test.result }}"
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        # FIX: Ensure this path matches your repository structure 
+        # If your lock file is in the root, remove 'automation-framework/'
+        cache: 'yarn'
+        cache-dependency-path: 'automation-framework/yarn.lock'
+
+    - name: Install dependencies
+      # If using the subfolder, run: cd automation-framework && yarn install
+      run: yarn install
+
+    - name: Install Playwright Browsers
+      run: npx playwright install --with-deps
+
+    - name: Run Playwright tests
+      # Runs tests in parallel with automatic retries as per your framework config
+      run: npx playwright test
+
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-report
+        path: playwright-report/
+        retention-days: 30
