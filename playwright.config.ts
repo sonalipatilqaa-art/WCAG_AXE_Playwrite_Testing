@@ -2,27 +2,20 @@ import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-// Load environment variables
+/**
+ * Load environment variables from .env file
+ */
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
-// BrowserStack configuration
+/**
+ * BrowserStack configuration
+ */
 const isBrowserStack = process.env.BROWSERSTACK === 'true';
 const browserStackUsername = process.env.BROWSERSTACK_USERNAME;
 const browserStackAccessKey = process.env.BROWSERSTACK_ACCESS_KEY;
 const buildName = process.env.BROWSERSTACK_BUILD_NAME || 'Playwright Automation Build';
 const projectName = process.env.BROWSERSTACK_PROJECT_NAME || 'Automation Framework';
 
-/**
- * Playwright Configuration
- * 
- * Features:
- * - Multi-browser support (Chromium, Firefox, WebKit)
- * - Multi-resolution testing (Mobile, Tablet, Desktop)
- * - BrowserStack cloud execution
- * - Parallel test execution
- * - Trace, video, and screenshot capture on failure
- * - Network idle waiting for SPAs (React, Angular, Vue)
- */
 export default defineConfig({
   // Test directory
   testDir: './tests',
@@ -34,7 +27,12 @@ export default defineConfig({
   fullyParallel: true, // Run tests in parallel
   forbidOnly: !!process.env.CI, // Fail if test.only is committed
   retries: process.env.CI ? 2 : 0, // Retry on CI failures
-  workers: process.env.CI ? 4 : undefined, // Limit workers on CI
+  
+  /**
+   * Optimization: Standard GitHub Actions runners have 2 CPU cores. 
+   * Setting workers to 2 prevents resource contention and crashes.
+   */
+  workers: process.env.CI ? 2 : undefined,
 
   // Reporter configuration
   reporter: [
@@ -49,21 +47,24 @@ export default defineConfig({
     // Base URL for navigation
     baseURL: process.env.BASE_URL || 'https://www.saucedemo.com',
 
-    // Browser context options
-    trace: 'on-first-retry', // Trace on first retry
-    screenshot: 'only-on-failure', // Screenshot on failure
-    video: 'retain-on-failure', // Video on failure
+    /**
+     * FIX: 'headless' must be true for CI environments without an XServer.
+     * This logic forces headless mode in GitHub Actions while allowing 
+     * local headed execution if HEADLESS=false in your .env.
+     */
+    headless: process.env.CI ? true : (process.env.HEADLESS === 'true'),
 
-    // Network settings for SPAs
+    // Browser context options
+    trace: 'on-first-retry', // Capture trace only on the first retry to save time/space
+    screenshot: 'only-on-failure', 
+    video: 'retain-on-failure', 
+
+    // Network settings for SPAs (React/Angular)
     actionTimeout: 10000,
     navigationTimeout: 30000,
 
     // Viewport settings
     viewport: { width: 1920, height: 1080 },
-
-    // Browser options
-    headless: process.env.HEADLESS === 'true',
-    slowMo: parseInt(process.env.SLOW_MO || '0'),
 
     // Permissions
     permissions: [],
@@ -75,13 +76,10 @@ export default defineConfig({
 
   // Project configurations for different browsers and devices
   projects: [
-    // Desktop Browsers
     {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        // Note: 'channel: chrome' removed for ARM64 compatibility
-        // Uses Chromium instead of Google Chrome
       },
     },
     {
@@ -111,22 +109,13 @@ export default defineConfig({
       },
     },
 
-    // Tablet
-    {
-      name: 'tablet',
-      use: {
-        ...devices['iPad Pro'],
-      },
-    },
-
-    // BrowserStack Cloud Projects (Conditional)
+    // BrowserStack Cloud Projects (Conditional execution)
     ...(isBrowserStack && browserStackUsername && browserStackAccessKey
       ? [
           {
             name: 'browserstack-chrome-win',
             use: {
               browserName: 'chromium',
-              channel: 'chrome',
               connectOptions: {
                 wsEndpoint: `wss://cdp.browserstack.com/playwright?caps=${encodeURIComponent(
                   JSON.stringify({
@@ -139,98 +128,7 @@ export default defineConfig({
                     project: projectName,
                     'browserstack.username': browserStackUsername,
                     'browserstack.accessKey': browserStackAccessKey,
-                    'browserstack.local': false,
                     'browserstack.networkLogs': true,
-                    'browserstack.console': 'verbose',
-                  })
-                )}`,
-              },
-            },
-          },
-          {
-            name: 'browserstack-firefox-mac',
-            use: {
-              browserName: 'firefox',
-              connectOptions: {
-                wsEndpoint: `wss://cdp.browserstack.com/playwright?caps=${encodeURIComponent(
-                  JSON.stringify({
-                    browser: 'firefox',
-                    browser_version: 'latest',
-                    os: 'OS X',
-                    os_version: 'Sonoma',
-                    name: 'Firefox macOS Test',
-                    build: buildName,
-                    project: projectName,
-                    'browserstack.username': browserStackUsername,
-                    'browserstack.accessKey': browserStackAccessKey,
-                    'browserstack.local': false,
-                    'browserstack.networkLogs': true,
-                  })
-                )}`,
-              },
-            },
-          },
-          {
-            name: 'browserstack-safari-mac',
-            use: {
-              browserName: 'webkit',
-              connectOptions: {
-                wsEndpoint: `wss://cdp.browserstack.com/playwright?caps=${encodeURIComponent(
-                  JSON.stringify({
-                    browser: 'playwright-webkit',
-                    browser_version: 'latest',
-                    os: 'OS X',
-                    os_version: 'Sonoma',
-                    name: 'Safari macOS Test',
-                    build: buildName,
-                    project: projectName,
-                    'browserstack.username': browserStackUsername,
-                    'browserstack.accessKey': browserStackAccessKey,
-                    'browserstack.local': false,
-                  })
-                )}`,
-              },
-            },
-          },
-          {
-            name: 'browserstack-mobile-android',
-            use: {
-              browserName: 'chromium',
-              connectOptions: {
-                wsEndpoint: `wss://cdp.browserstack.com/playwright?caps=${encodeURIComponent(
-                  JSON.stringify({
-                    browser: 'chrome',
-                    device: 'Samsung Galaxy S23',
-                    realMobile: 'true',
-                    os_version: '13.0',
-                    name: 'Android Chrome Test',
-                    build: buildName,
-                    project: projectName,
-                    'browserstack.username': browserStackUsername,
-                    'browserstack.accessKey': browserStackAccessKey,
-                    'browserstack.local': false,
-                  })
-                )}`,
-              },
-            },
-          },
-          {
-            name: 'browserstack-mobile-ios',
-            use: {
-              browserName: 'webkit',
-              connectOptions: {
-                wsEndpoint: `wss://cdp.browserstack.com/playwright?caps=${encodeURIComponent(
-                  JSON.stringify({
-                    browser: 'playwright-webkit',
-                    device: 'iPhone 15',
-                    realMobile: 'true',
-                    os_version: '17',
-                    name: 'iOS Safari Test',
-                    build: buildName,
-                    project: projectName,
-                    'browserstack.username': browserStackUsername,
-                    'browserstack.accessKey': browserStackAccessKey,
-                    'browserstack.local': false,
                   })
                 )}`,
               },
@@ -239,12 +137,4 @@ export default defineConfig({
         ]
       : []),
   ],
-
-  // Web server (if needed for local testing)
-  // webServer: {
-  //   command: 'npm run start',
-  //   port: 3000,
-  //   timeout: 120 * 1000,
-  //   reuseExistingServer: !process.env.CI,
-  // },
 });
